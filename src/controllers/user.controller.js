@@ -26,9 +26,23 @@ async function generateAccessAndRefreshTokens(userId) {
 
 // Register User
 const registerUser = asyncHandler(async (req, res) => {
-    //console.log("Request body:", req.body);
-    res.status(200).json({ message: "ok" });
+    const { username, email, password, fullName,avatar } = req.body;
+
+    const user = new User({
+        username,
+        email,
+        fullName,
+        avatar,
+        password, // The password will be hashed in the pre-save middleware
+    });
+
+    await user.save();
+    //console.log("User registered with hashed password:", user.password); // Log hashed password
+
+    res.status(200).json({ message: "User registered successfully" });
 });
+
+
 
 // Login User
 const loginUser = asyncHandler(async (req, res) => {
@@ -38,16 +52,23 @@ const loginUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Username or email is required");
     }
 
+    // Find user by username or email
     const user = await User.findOne({ $or: [{ username }, { email }] });
     if (!user) {
+        console.log("User not found with username or email:", { username, email });
         throw new ApiError(404, "User does not exist");
     }
 
+    // Check if password is valid
     const isPasswordValid = await user.isPasswordCorrect(password);
     if (!isPasswordValid) {
+        console.log("Invalid password for user:", username || email);
         throw new ApiError(401, "Password incorrect");
     }
 
+    //console.log("Password validated for user:", username || email);
+
+    // Generate tokens if password is correct
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
@@ -141,6 +162,19 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     //     throw new ApiError(401, error?.message || "Invalid refresh token")
     // }
 
+})
+
+const changeCurrentPassword = asyncHandler(async(req,res) =>{
+    const {oldPassword,newPassword} = req.body
+    const user =await User.findById(req.user?._id)
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if(!isPasswordCorrect){
+        throw new ApiError(400,"Invalid Old Password")
+    }
+
+    user.password = newPassword
 })
 
 export { registerUser, loginUser, logoutUser, refreshAccessToken };
